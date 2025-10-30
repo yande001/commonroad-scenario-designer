@@ -62,11 +62,11 @@ class Node:
             local_y.set("v", str(self.local_y))
             node.append(local_x)
             node.append(local_y)
-        if (self.ele != "0.0" and self.ele != "0") or self.autoware:
-            ele = etree.SubElement(node, "tag")
-            ele.set("k", "ele")
-            ele.set("v", self.ele)
-            node.append(ele)
+        # Always output elevation tag
+        ele = etree.SubElement(node, "tag")
+        ele.set("k", "ele")
+        ele.set("v", self.ele)
+        node.append(ele)
         if self.mgrs_code:
             mgrs_code = etree.SubElement(node, "tag")
             mgrs_code.set("k", "mgrs_code")

@@ -6,8 +6,12 @@ from pathlib import Path
 from typing import Optional, Union
 
 from commonroad.scenario.scenario import Scenario
-from commonroad_sumo.cr2sumo import CR2SumoMapConverter
-from commonroad_sumo.helpers import SumoApplication, execute_sumo_application
+try:
+    from commonroad_sumo.cr2sumo import CR2SumoMapConverter
+    from commonroad_sumo.helpers import SumoApplication, execute_sumo_application
+    HAS_SUMO = True
+except ImportError:
+    HAS_SUMO = False
 from lxml import etree
 
 from crdesigner.common.config.general_config import general_config
@@ -123,6 +127,8 @@ def commonroad_to_sumo(input_file: Path_T, output_file: Path_T):
     :param output_file: Path where files should be stored
     :return: CommonRoad scenario
     """
+    if not HAS_SUMO:
+        raise ImportError("commonroad-sumo is required for SUMO conversion. Please install it.")
 
     path, _ = os.path.split(output_file)
     converter = CR2SumoMapConverter.from_file(input_file)
@@ -152,6 +158,9 @@ def osm_to_commonroad_using_sumo(input_file: Path_T) -> Optional[Scenario]:
     :param input_file: Path to OpenStreetMap file
     :return: CommonRoad scenario
     """
+    if not HAS_SUMO:
+        raise ImportError("commonroad-sumo is required for SUMO conversion. Please install it.")
+
     if isinstance(input_file, str):
         input_file_pth = Path(input_file)
     else:

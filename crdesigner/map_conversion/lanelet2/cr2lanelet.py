@@ -521,12 +521,22 @@ class CR2LaneletConverter:
                     z_end = stop_line_end[2]
 
                 # create nodes from the points and add them to the osm
-                node_start = Node(
-                    self.id_count, lat_start, lon_start, z_start, autoware=self._config.autoware
-                )
-                node_end = Node(
-                    self.id_count, lat_end, lon_end, z_end, autoware=self._config.autoware
-                )
+                if self._config.use_local_coordinates:
+                    node_start = Node(
+                        self.id_count, lat_start, lon_start, z_start, autoware=self._config.autoware,
+                        local_x=ll.stop_line.start[0], local_y=ll.stop_line.start[1]
+                    )
+                    node_end = Node(
+                        self.id_count, lat_end, lon_end, z_end, autoware=self._config.autoware,
+                        local_x=ll.stop_line.end[0], local_y=ll.stop_line.end[1]
+                    )
+                else:
+                    node_start = Node(
+                        self.id_count, lat_start, lon_start, z_start, autoware=self._config.autoware
+                    )
+                    node_end = Node(
+                        self.id_count, lat_end, lon_end, z_end, autoware=self._config.autoware
+                    )
                 self.osm.add_node(node_start)
                 self.osm.add_node(node_end)
                 # create a way from newly created nodes and add it to the osm
@@ -610,8 +620,14 @@ class CR2LaneletConverter:
             z = sign.position[2]
 
         # creating and adding those nodes to our osm
-        self.osm.add_node(Node(id1, lat_1, lon_1, z, autoware=self._config.autoware))
-        self.osm.add_node(Node(id2, lat_2, lon_2, z, autoware=self._config.autoware))
+        if self._config.use_local_coordinates:
+            self.osm.add_node(Node(id1, lat_1, lon_1, z, autoware=self._config.autoware,
+                                  local_x=sign.position[0], local_y=sign.position[1]))
+            self.osm.add_node(Node(id2, lat_2, lon_2, z, autoware=self._config.autoware,
+                                  local_x=sign.position[0] + 0.1, local_y=sign.position[1]))
+        else:
+            self.osm.add_node(Node(id1, lat_1, lon_1, z, autoware=self._config.autoware))
+            self.osm.add_node(Node(id2, lat_2, lon_2, z, autoware=self._config.autoware))
 
         # matching the type of the traffic sign
         sign_id = sign.traffic_sign_elements[0].traffic_sign_element_id
