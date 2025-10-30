@@ -10,6 +10,9 @@ from crdesigner.map_conversion.opendrive.odr2cr.opendrive_conversion.plane_eleme
 from crdesigner.map_conversion.opendrive.odr2cr.opendrive_parser.elements.roadLanes import (
     RoadMark,
 )
+from crdesigner.map_conversion.opendrive.odr2cr.opendrive_parser.elements.geometry import (
+    calc_next_s,
+)
 
 
 class ParametricLaneBorderGroup:
@@ -281,26 +284,23 @@ class ParametricLane:
         """
         left_vertices = []
         right_vertices = []
-        # calculate left and right vertices of lanelet
-        # s = 0
-        # check_3 = True
 
-        # old version from opendrive2lanelet start
-        # no sampling of s and "distance" between two consecutive s is similar
-        #
+        # Return empty arrays if length is invalid
         if self.length < 0:
             return np.array(left_vertices), np.array(right_vertices)
-        num_steps = int(max(3, np.ceil(self.length / float(0.5))))
-        poses = np.linspace(0, self.length, num_steps)
-        for s in poses:
-            #
-            # old version end
 
-            # version with sampling
-            # while s <= self.length:
-            # s_cache = s + 0.0
+        # Adaptive sampling based on curvature
+        s = 0
+        check_3 = True  # Ensure at least 3 vertices
+
+        while s <= self.length:
+            s_cache = s + 0.0
+
+            # Calculate border positions with curvature
             inner_pos, _, curvature, max_geometry_length, inner_elev = self.calc_border("inner", s)
             outer_pos, _, _, _, outer_elev = self.calc_border("outer", s, compute_curvature=False)
+
+            # Transform coordinates if transformer is provided
             if transformer is not None:
                 transformed_inner = transformer.transform(inner_pos[0], inner_pos[1])
                 transformed_outer = transformer.transform(outer_pos[0], outer_pos[1])
@@ -310,24 +310,26 @@ class ParametricLane:
                 left_vertices.append([inner_pos[0], inner_pos[1], inner_elev])
                 right_vertices.append([outer_pos[0], outer_pos[1], outer_elev])
 
-            # version with sampling
-            # if s >= self.length:
-            #     break
-            #
-            # if s == max_geometry_length:
-            #     s += min_delta_s
-            # else:
-            #     s = calc_next_s(s, curvature, error_tolerance=error_tolerance, min_delta_s=min_delta_s,
-            #                     s_max=max_geometry_length)
-            #
-            # # ensure total road length is not exceeded
-            # s = min(self.length, s)
-            # # ensure lanelet has >= 3 vertices
-            # if check_3 and s >= self.length:
-            #     s = (s_cache + self.length) * 0.5
-            #
-            # check_3 = False
-        # assert len(left_vertices) >= 3, f"Not enough vertices, len: {len(left_vertices)}"
+            # Break if we've reached the end
+            if s >= self.length:
+                break
+
+            # Calculate next sampling position adaptively based on curvature
+            if s == max_geometry_length:
+                s += min_delta_s
+            else:
+                s = calc_next_s(s, curvature, error_tolerance=error_tolerance, min_delta_s=min_delta_s,
+                               s_max=max_geometry_length)
+
+            # Ensure total road length is not exceeded
+            s = min(self.length, s)
+
+            # Ensure lanelet has >= 3 vertices by adding intermediate point if needed
+            if check_3 and s >= self.length:
+                s = (s_cache + self.length) * 0.5
+
+            check_3 = False
+
         return np.array(left_vertices), np.array(right_vertices)
 
     def zero_width_change_positions(self) -> float:

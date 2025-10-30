@@ -4,6 +4,7 @@ OpenDRIVE to Lanelet2 conversion with post-processing for VMB format.
 Converts XODR files to Lanelet2 OSM format with local coordinates and VMB-specific formatting.
 """
 import sys
+import argparse
 from pathlib import Path
 from lxml import etree
 
@@ -16,13 +17,17 @@ from crdesigner.map_conversion.lanelet2.cr2lanelet import CR2LaneletConverter
 from crdesigner.common.config.lanelet2_config import lanelet2_config
 
 
-def convert_odr_to_ll2_vmb(input_file, output_file=None):
+def convert_odr_to_ll2_vmb(input_file, output_file=None, min_delta_s=0.5, error_tolerance=0.15):
     """
     Convert OpenDRIVE to Lanelet2 with VMB format post-processing.
 
     Args:
         input_file: Path to input .xodr file
         output_file: Path to output .osm file (optional, auto-generated if not provided)
+        min_delta_s: Minimum step length between sampling positions (meters, default: 0.5)
+                     Lower value = more vertices/detail, higher value = fewer vertices
+        error_tolerance: Maximum error between reference geometry and polyline (meters, default: 0.15)
+                        Lower value = more vertices for accuracy, higher value = fewer vertices
 
     Returns:
         Path to the generated output file
@@ -41,10 +46,22 @@ def convert_odr_to_ll2_vmb(input_file, output_file=None):
     print(f"Converting: {input_path.name} → {output_file.name}")
     print("-" * 80)
 
+    # Configure sampling parameters BEFORE creating Network
+    print(f"Sampling configuration:")
+    print(f"  • min_delta_s: {min_delta_s}m (min step between vertices)")
+    print(f"  • error_tolerance: {error_tolerance}m (max geometric error)")
+    print()
+
+    # Apply sampling configuration to OpenDRIVE config
+    # IMPORTANT: Must be done before creating Network object
+    open_drive_config.min_delta_s = min_delta_s
+    open_drive_config.error_tolerance = error_tolerance
+
     # Step 1: OpenDRIVE → CommonRoad
     print("[1/4] Converting OpenDRIVE → CommonRoad...")
     opendrive = parse_opendrive(input_path)
-    road_network = Network()
+    # Pass config to Network constructor to ensure it uses updated values
+    road_network = Network(config=open_drive_config)
     road_network.load_opendrive(opendrive)
     scenario = road_network.export_commonroad_scenario(general_config, open_drive_config)
 
@@ -142,14 +159,46 @@ def convert_odr_to_ll2_vmb(input_file, output_file=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python odr_to_ll2_with_postprocessing.py <input.xodr> [output.osm]")
-        print()
-        print("Example:")
-        print("  python odr_to_ll2_with_postprocessing.py input/Town04_no_georef.xodr output.osm")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Convert OpenDRIVE to Lanelet2 with VMB format post-processing",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Basic conversion (default sampling)
+  python odr_to_ll2_with_postprocessing.py input.xodr output.osm
 
-    input_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else None
+  # High detail (more vertices)
+  python odr_to_ll2_with_postprocessing.py input.xodr output.osm --min-delta-s 0.25 --error-tolerance 0.05
 
-    convert_odr_to_ll2_vmb(input_file, output_file)
+  # Low detail (fewer vertices, smaller file)
+  python odr_to_ll2_with_postprocessing.py input.xodr output.osm --min-delta-s 1.0 --error-tolerance 0.3
+
+Sampling parameters:
+  - min_delta_s: Smaller values create more vertices (higher detail)
+  - error_tolerance: Smaller values ensure higher geometric accuracy
+        """
+    )
+
+    parser.add_argument("input", help="Input OpenDRIVE (.xodr) file")
+    parser.add_argument("output", nargs="?", default=None, help="Output OSM file (optional)")
+    parser.add_argument(
+        "--min-delta-s",
+        type=float,
+        default=0.5,
+        help="Minimum step length between sampling positions in meters (default: 0.5)"
+    )
+    parser.add_argument(
+        "--error-tolerance",
+        type=float,
+        default=0.15,
+        help="Maximum geometric error in meters (default: 0.15)"
+    )
+
+    args = parser.parse_args()
+
+    convert_odr_to_ll2_vmb(
+        args.input,
+        args.output,
+        min_delta_s=args.min_delta_s,
+        error_tolerance=args.error_tolerance
+    )
