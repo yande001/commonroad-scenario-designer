@@ -104,21 +104,25 @@ class Road:
 
         self.center = self.lane_list[i].left_vertices
         self.hdg = compute_heading(self.center, self.lane_list[i].center_vertices)
-        self.center = (
-            np.insert(
+
+        # Handle both 2D and 3D coordinates
+        if self.hdg[-1] != 0.0:
+            new_point = [
+                self.center[-1][0] - np.cos(self.hdg[-1]) * 0.01,
+                self.center[-1][1] - np.sin(self.hdg[-1]) * 0.01,
+            ]
+            # If 3D coordinates (has z-value), preserve it
+            if self.center.shape[1] == 3:
+                new_point.append(self.center[-1][2])
+
+            self.center = np.insert(
                 self.center,
                 self.center.shape[0] - 1,
-                np.array(
-                    [
-                        self.center[-1][0] - np.cos(self.hdg[-1]) * 0.01,
-                        self.center[-1][1] - np.sin(self.hdg[-1]) * 0.01,
-                    ]
-                ),
+                np.array(new_point),
                 0,
             )
-            if self.hdg[-1] != 0.0
-            else self.center
-        )
+        else:
+            self.center = self.center
         self.hdg = (
             np.insert(self.hdg, self.hdg.shape[0] - 1, self.hdg[-1])
             if self.hdg[-1] != 0.0
@@ -239,8 +243,10 @@ class Road:
 
         :return: Length of lanelet
         """
-        curv = compute_curvature_from_polyline(self.center)
-        arc_length = compute_pathlength_from_polyline(self.center)
+        # Extract 2D coordinates for curvature/pathlength computation (these functions don't support 3D)
+        center_2d = self.center[:, :2] if self.center.shape[1] == 3 else self.center
+        curv = compute_curvature_from_polyline(center_2d)
+        arc_length = compute_pathlength_from_polyline(center_2d)
         curv_dif = np.ediff1d(curv)
         # loop through all the points in the polyline check if
         # the delta curvature is below DEVIAT
