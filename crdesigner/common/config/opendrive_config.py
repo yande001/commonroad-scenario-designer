@@ -84,6 +84,12 @@ class OpenDriveConfig(BaseConfig):
         "OpenDRIVE lane types which are considered for conversion",
     )
 
+    concatenate_lanelets_flag = Attribute(
+        True,
+        "Concatenate lanelets",
+        "If True, automatically merge geometrically continuous lane sections into a single lanelet",
+    )
+
     # cr2odr config parameters
     initial_road_counting = Attribute(20, "Initial road ID", "Initial counting for road ID")
 

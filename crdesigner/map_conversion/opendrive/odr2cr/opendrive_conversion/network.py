@@ -419,8 +419,9 @@ class Network:
         lanelet_network.prune_network()
 
         # concatenate possible lanelets with their successors
-        replacement_id_map = lanelet_network.concatenate_possible_lanelets()
-        self._link_index.concatenate_lanes_in_intersection_map(replacement_id_map)
+        if self._config.concatenate_lanelets_flag:
+            replacement_id_map = lanelet_network.concatenate_possible_lanelets()
+            self._link_index.concatenate_lanes_in_intersection_map(replacement_id_map)
 
         # Perform lane splits and joins
         lanelet_network.join_and_split_possible_lanes()
