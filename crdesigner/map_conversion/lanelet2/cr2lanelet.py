@@ -175,6 +175,11 @@ class CR2LaneletConverter:
 
         self.scenario_translation = (0, 0)
 
+        # Mapping from OpenDrive (road_id, section_id, lane_id) -> Lanelet2 relation ID.
+        # Populated during conversion when lanelets carry an OpenDrive-derived description
+        # (format "road_id.section_id.lane_id.width_id" set by ConversionLaneletNetwork).
+        self.odr_to_l2_mapping: Dict[Tuple[int, int, int], int] = {}
+
     def _create_transformer(self, scenario: Scenario):
         """
         Creates a Transformer object for conversion from CR o Lanelet2.
@@ -227,6 +232,7 @@ class CR2LaneletConverter:
         self.last_nodes = {}  # saves last left and right node
         self.left_ways = {}
         self.right_ways = {}
+        self.odr_to_l2_mapping = {}
 
         # set origin shift according to translation in scenario
         if self.scenario_translation[0] != 0 and self.scenario_translation[1] != 0:
@@ -700,6 +706,21 @@ class CR2LaneletConverter:
         way_rel = WayRelation(
             self.id_count, left_way_id, right_way_id, tag_dict={"type": "lanelet"}
         )
+
+        # Record OpenDrive -> Lanelet2 ID mapping when the lanelet carries an OpenDrive-
+        # derived description (format "road_id.section_id.lane_id.width_id" set by
+        # ConversionLaneletNetwork.convert_all_lanelet_ids).
+        desc = getattr(lanelet, "description", None)
+        if desc is not None:
+            parts = str(desc).split(".")
+            if len(parts) >= 3:
+                try:
+                    odr_road_id = int(parts[0])
+                    odr_section_id = int(parts[1])
+                    odr_lane_id = int(parts[2])
+                    self.odr_to_l2_mapping[(odr_road_id, odr_section_id, odr_lane_id)] = way_rel.id_
+                except ValueError:
+                    pass
 
         # convert the speed signs
         self._convert_speed_sign(lanelet, way_rel)

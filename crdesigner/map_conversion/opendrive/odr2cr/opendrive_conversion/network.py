@@ -156,28 +156,32 @@ def convert_to_base_lanelet_network(lanelet_network: ConversionLaneletNetwork) -
     for light in lanelet_network.traffic_lights:
         network.add_traffic_light(light, set())
     for la in lanelet_network.lanelets:
-        network.add_lanelet(
-            Lanelet(
-                la.left_vertices,
-                la.center_vertices,
-                la.right_vertices,
-                la.lanelet_id,
-                la.predecessor,
-                la.successor,
-                la.adj_left,
-                la.adj_left_same_direction,
-                la.adj_right,
-                la.adj_right_same_direction,
-                la.line_marking_left_vertices,
-                la.line_marking_right_vertices,
-                la.stop_line,
-                la.lanelet_type,
-                la.user_one_way,
-                la.user_bidirectional,
-                la.traffic_signs,
-                la.traffic_lights,
-            )
+        new_la = Lanelet(
+            la.left_vertices,
+            la.center_vertices,
+            la.right_vertices,
+            la.lanelet_id,
+            la.predecessor,
+            la.successor,
+            la.adj_left,
+            la.adj_left_same_direction,
+            la.adj_right,
+            la.adj_right_same_direction,
+            la.line_marking_left_vertices,
+            la.line_marking_right_vertices,
+            la.stop_line,
+            la.lanelet_type,
+            la.user_one_way,
+            la.user_bidirectional,
+            la.traffic_signs,
+            la.traffic_lights,
         )
+        # Preserve the OpenDrive-derived description set by convert_all_lanelet_ids
+        # (format "road_id.section_id.lane_id.width_id") so downstream consumers
+        # (e.g. CR2LaneletConverter) can build an ID mapping table.
+        if hasattr(la, "description") and la.description is not None:
+            new_la.description = la.description
+        network.add_lanelet(new_la)
     return network
 
 
