@@ -1151,6 +1151,8 @@ class CR2LaneletConverter:
         Possibility of a lane change has been copied from the Lanelet2 documentation.
         The lane change tags are being used by Autoware.
         """
+        # Default applied where the marking does not determine lane_change; user-configurable.
+        default_lane_change = getattr(self._config, "autoware_default_lane_change", "no")
         ways = list(self.osm.ways.values())
         for way in ways:
             if way.tag_dict:
@@ -1166,10 +1168,14 @@ class CR2LaneletConverter:
                         way.tag_dict["type"] != "traffic_light"
                         and way.tag_dict["type"] != "traffic_sign"
                     ):
+                        # a non-dashed lane marking (solid, road_border, …) forbids a lane change
                         way.tag_dict["lane_change"] = "no"
                     else:
-                        # if the line marking does not exist, lane change is not possible
+                        # regulatory-element way (traffic light/sign), not a lane boundary
                         way.tag_dict["lane_change"] = "no"
+                else:
+                    # no line-marking subtype to derive from -> configurable default
+                    way.tag_dict["lane_change"] = default_lane_change
             else:
-                # if the line marking does not exist, lane change is not possible
-                way.tag_dict["lane_change"] = "no"
+                # no line marking at all -> configurable default
+                way.tag_dict["lane_change"] = default_lane_change

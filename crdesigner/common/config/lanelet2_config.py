@@ -30,6 +30,13 @@ class Lanelet2Config(BaseConfig):
         "source has no MAX_SPEED sign. Keys match the lanelet location tag.",
     )
 
+    autoware_default_lane_change = Attribute(
+        "no",
+        "Autoware default lane_change",
+        "Default lane_change tag applied to a line way when the lane marking does not "
+        "determine it (no marking / no subtype). Typically 'yes' or 'no'.",
+    )
+
     use_local_coordinates = Attribute(
         False,
         "Use local coordinates",
