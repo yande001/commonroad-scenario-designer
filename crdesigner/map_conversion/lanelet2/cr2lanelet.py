@@ -25,6 +25,16 @@ from crdesigner.map_conversion.lanelet2.lanelet2 import (
 )
 
 
+# Lanelet subtypes that represent a drivable lane (get one_way + speed_limit under Autoware).
+AUTOWARE_DRIVING_SUBTYPES = {"road", "road_shoulder", "bicycle_lane", "highway", "exit", "bus_lane"}
+
+# Per-location default speed limit (km/h) used when the source has no MAX_SPEED sign.
+AUTOWARE_DEFAULT_SPEED_KMH = {"urban": 50.0, "nonurban": 60.0, "private": 30.0}
+
+# CommonRoad stores speeds in m/s; Autoware speed_limit is km/h.
+_MS_TO_KMH = 3.6
+
+
 def _set_overriding_tags_for_bidirectional_users(lanelet: Lanelet, way_rel: WayRelation):
     """
     Function that extracts bidirectional users from CR lanelet and creates according overriding tags for L2 lanelet
@@ -726,17 +736,21 @@ class CR2LaneletConverter:
         self._convert_speed_sign(lanelet, way_rel)
 
         # update the way relation with the subtype, if it exists
+        location = None
         if subtype_in is True:
             way_rel.tag_dict.update({"subtype": subtype})
 
             # set the location tag
-            if LaneletType.URBAN in lanelet.lanelet_type:
-                way_rel.tag_dict["location"] = "urban"
-            else:
-                way_rel.tag_dict["location"] = "nonurban"
+            location = "urban" if LaneletType.URBAN in lanelet.lanelet_type else "nonurban"
+            way_rel.tag_dict["location"] = location
 
-        # set the overriding tags for bidirectional users
-        _set_overriding_tags_for_bidirectional_users(lanelet, way_rel)
+        if self._config.autoware:
+            # Autoware: emit one_way:yes/no + speed_limit on drivable lanes,
+            # replacing the granular one_way:<user> tags.
+            self._set_autoware_lanelet_tags(lanelet, way_rel, subtype if subtype_in else None, location)
+        else:
+            # set the overriding tags for bidirectional users
+            _set_overriding_tags_for_bidirectional_users(lanelet, way_rel)
 
         # add the way relation to the osm
         self.osm.add_way_relation(way_rel)
@@ -1069,6 +1083,43 @@ class CR2LaneletConverter:
                         )
         for speed_sign_id in speed_sign_ids:
             way_rel.regulatory_elements.append(str(speed_sign_id))
+
+    def _lanelet_max_speed_kmh(self, lanelet: Lanelet) -> Optional[float]:
+        """Return the lanelet's MAX_SPEED sign value in km/h, or None if it has none."""
+        for traffic_sign_id in lanelet.traffic_signs:
+            for sign in self.lanelet_network.traffic_signs:
+                if sign.traffic_sign_id != traffic_sign_id:
+                    continue
+                element = list(sign.traffic_sign_elements)[0]
+                if element.traffic_sign_element_id.name == "MAX_SPEED":
+                    try:
+                        # CommonRoad stores MAX_SPEED in m/s.
+                        return float(element.additional_values[0]) * _MS_TO_KMH
+                    except (ValueError, IndexError):
+                        return None
+        return None
+
+    def _set_autoware_lanelet_tags(
+        self, lanelet: Lanelet, way_rel: WayRelation, subtype: Optional[str], location: Optional[str]
+    ):
+        """
+        Add Autoware-required lanelet tags (one_way, speed_limit) to a drivable lane.
+
+        - ``one_way``: ``yes`` unless the lane carries bidirectional users. This replaces
+          the granular ``one_way:<user>`` tags that the non-Autoware path emits.
+        - ``speed_limit`` (km/h): taken from a MAX_SPEED sign on the lanelet if present,
+          otherwise a per-location default (vm-01-01 / vm-01-09).
+        """
+        if subtype not in AUTOWARE_DRIVING_SUBTYPES:
+            return
+
+        way_rel.tag_dict["one_way"] = "no" if lanelet.user_bidirectional else "yes"
+
+        speed_kmh = self._lanelet_max_speed_kmh(lanelet)
+        if speed_kmh is None:
+            speed_kmh = AUTOWARE_DEFAULT_SPEED_KMH.get(location, AUTOWARE_DEFAULT_SPEED_KMH["urban"])
+        # Whole km/h reads cleanly in Autoware; sign values derived from mph are not round.
+        way_rel.tag_dict["speed_limit"] = f"{speed_kmh:.0f}"
 
     def _append_lane_change_tags(self):
         """
