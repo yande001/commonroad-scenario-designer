@@ -85,10 +85,10 @@ def _line_marking_to_type_subtype_vertices(line_marking: LineMarking) -> [str, s
         lanelet2_type = "line_thick"
         subtype = "solid"
     if line_marking is LineMarking.CURB:
-        lanelet2_type = "curbstone"
+        lanelet2_type = "road_border"
         subtype = "high"
     if line_marking is LineMarking.LOWERED_CURB:
-        lanelet2_type = "curbstone"
+        lanelet2_type = "road_border"
         subtype = "low"
     if line_marking is LineMarking.DASHED_SOLID:
         lanelet2_type = "line_thick"
@@ -104,6 +104,31 @@ def _line_marking_to_type_subtype_vertices(line_marking: LineMarking) -> [str, s
         subtype = "dashed_dashed"
 
     return lanelet2_type, subtype
+
+
+def _combine_subtypes(first: str, second: str) -> str:
+    """Combine the L2 line subtypes of two lanelets that share a boundary.
+
+    Each CR lanelet reports its own half of the shared marking. For simple
+    markings the two halves form a double line (``solid`` + ``solid`` ->
+    ``solid_solid``). If either half is *already* a compound marking (e.g.
+    ``solid_solid`` from a ``SOLID_SOLID`` road mark) it already describes the
+    whole line, so it is used as-is rather than concatenated again — which
+    previously produced the invalid ``solid_solid_solid_solid``.
+
+    :param first: subtype of the first lanelet's boundary
+    :param second: subtype of the second lanelet's boundary
+    :return: a valid L2 line subtype
+    """
+    if "_" in first:
+        return first
+    if "_" in second:
+        return second
+    combined = first + "_" + second
+    # dashed_dashed does not exist in L2 format
+    if combined == "dashed_dashed":
+        return "dashed"
+    return combined
 
 
 def _extract_and_convert_subtype_name(
@@ -912,12 +937,9 @@ class CR2LaneletConverter:
                     # update the tag dict accordingly
                     if type_lanelet != "unknown":
                         if type_adj_right != "unknown":
-                            # if there are two linemarking types, add the subtypes together to match the L2 notation
+                            # if there are two linemarking types, combine the subtypes to match the L2 notation
                             # as the type should be the same, the type of the first lanelet line marking is used
-                            subtype = subtype_lanelet + "_" + subtype_adj_right
-                            # dashed_dashed does not exist in L2 format
-                            if subtype == "dashed_dashed":
-                                subtype = "dashed"
+                            subtype = _combine_subtypes(subtype_lanelet, subtype_adj_right)
                         else:
                             subtype = subtype_lanelet
                         self.osm.ways[potential_right_way].tag_dict = {
@@ -980,12 +1002,9 @@ class CR2LaneletConverter:
                     # update the tag dict accordingly
                     if type_lanelet != "unknown":
                         if type_adj_left != "unknown":
-                            # if there are two linemarking types, add the subtypes together to match the L2 notation
+                            # if there are two linemarking types, combine the subtypes to match the L2 notation
                             # as the type should be the same, the type of the first lanelet line marking is used
-                            subtype = subtype_adj_left + "_" + subtype_lanelet
-                            # dashed_dashed does not exist in L2 format
-                            if subtype == "dashed_dashed":
-                                subtype = "dashed"
+                            subtype = _combine_subtypes(subtype_adj_left, subtype_lanelet)
                         else:
                             subtype = subtype_lanelet
                         self.osm.ways[potential_left_way].tag_dict = {
