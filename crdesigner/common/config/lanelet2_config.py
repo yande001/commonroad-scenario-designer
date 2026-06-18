@@ -23,6 +23,13 @@ class Lanelet2Config(BaseConfig):
         "Boolean indicating whether the conversion " "should be autoware compatible",
     )
 
+    autoware_default_speed_kmh = Attribute(
+        {"urban": 50.0, "nonurban": 60.0, "private": 30.0},
+        "Autoware default speed limits (km/h)",
+        "Per-location default speed_limit (km/h) applied to a drivable lane when the "
+        "source has no MAX_SPEED sign. Keys match the lanelet location tag.",
+    )
+
     use_local_coordinates = Attribute(
         False,
         "Use local coordinates",

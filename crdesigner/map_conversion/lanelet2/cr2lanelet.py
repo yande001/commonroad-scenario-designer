@@ -29,6 +29,8 @@ from crdesigner.map_conversion.lanelet2.lanelet2 import (
 AUTOWARE_DRIVING_SUBTYPES = {"road", "road_shoulder", "bicycle_lane", "highway", "exit", "bus_lane"}
 
 # Per-location default speed limit (km/h) used when the source has no MAX_SPEED sign.
+# This is the built-in fallback; the effective values come from
+# ``Lanelet2Config.autoware_default_speed_kmh`` and are user-overridable.
 AUTOWARE_DEFAULT_SPEED_KMH = {"urban": 50.0, "nonurban": 60.0, "private": 30.0}
 
 # CommonRoad stores speeds in m/s; Autoware speed_limit is km/h.
@@ -1117,7 +1119,10 @@ class CR2LaneletConverter:
 
         speed_kmh = self._lanelet_max_speed_kmh(lanelet)
         if speed_kmh is None:
-            speed_kmh = AUTOWARE_DEFAULT_SPEED_KMH.get(location, AUTOWARE_DEFAULT_SPEED_KMH["urban"])
+            defaults = getattr(
+                self._config, "autoware_default_speed_kmh", AUTOWARE_DEFAULT_SPEED_KMH
+            )
+            speed_kmh = defaults.get(location, defaults.get("urban", AUTOWARE_DEFAULT_SPEED_KMH["urban"]))
         # Whole km/h reads cleanly in Autoware; sign values derived from mph are not round.
         way_rel.tag_dict["speed_limit"] = f"{speed_kmh:.0f}"
 
